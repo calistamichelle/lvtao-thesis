@@ -29,10 +29,12 @@ GAP_TOLERANCE_S = 1.5 / FS   # consecutive timestamps further apart start a new 
 
 # HARTH label -> thesis class. Unlisted labels (3 = shuffling) stay in the stream
 # so the device still sees them, but are marked invalid and never scored.
-CLASSES = ("walking", "running", "stairs", "standing", "sitting", "lying", "cycling")
+# Sitting (7) and lying (8) are merged: with one thigh sensor the thigh is horizontal in
+# both postures, and the 7-class validation confusion matrix showed them heavily mixed.
+CLASSES = ("walking", "running", "stairs", "standing", "sedentary", "cycling")
 HARTH_LABEL_MAP = {
     1: "walking", 2: "running", 4: "stairs", 5: "stairs", 6: "standing",
-    7: "sitting", 8: "lying", 13: "cycling", 14: "cycling", 130: "cycling", 140: "cycling",
+    7: "sedentary", 8: "sedentary", 13: "cycling", 14: "cycling", 130: "cycling", 140: "cycling",
 }
 INVALID = -1
 
@@ -42,19 +44,25 @@ N_OUTER_FOLDS = _env_int("LVTAO_N_OUTER_FOLDS", 5)
 N_VAL_PARTICIPANTS = _env_int("LVTAO_N_VAL_PARTICIPANTS", 3)   # drawn from each outer-training pool
 
 # --- Training (identical for every scheduling policy) ----------------------
-TRAIN_STRIDE = 64
+# TRAIN_STRIDE and CLASS_WEIGHTING were chosen by select_training.py on validation participants only.
+TRAIN_STRIDE = _env_int("LVTAO_TRAIN_STRIDE", 32)
 MIN_VALID_FRACTION = 0.5     # a window needs at least this share of scorable samples to get a label
 BATCH_SIZE = 64
 MAX_EPOCHS = _env_int("LVTAO_MAX_EPOCHS", 60)
 LEARNING_RATE = 1e-3
 EARLY_STOP_PATIENCE = 8
-CLASS_WEIGHTING = True
+LR_PLATEAU_PATIENCE = 3      # halve the learning rate after this many epochs without val-loss improvement
+CLASS_WEIGHTING = os.environ.get("LVTAO_CLASS_WEIGHTING", "sqrt")   # "balanced", "sqrt" or "none"
+EVAL_STRIDE = 64             # window-level validation/test scoring, independent of TRAIN_STRIDE
 N_REPRESENTATIVE = 500       # training windows used to calibrate INT8 quantization
 
 # --- Scheduling policies ----------------------------------------------------
 FIXED_STRIDES = (128, 96, 64, 32)
 LVTAO_STRIDES = (128, 64, 32)   # level 0 (persistent, low variation) -> 128 ... level 2 -> 32
 LVTAO_INITIAL_LEVEL = 1
+# Main controller rule ("max" = signal intensity, "change" = change since the previous inference).
+# Chosen on validation participants: see results/lvtao_variant_selection.csv.
+LVTAO_RULE = os.environ.get("LVTAO_RULE", "change")
 FEATURE_EPS = 1e-6
 COMPOSITE_ALPHA = 0.5           # ablation rule only: score = alpha*var + beta*td
 COMPOSITE_BETA = 0.5

@@ -177,7 +177,7 @@ void cmd_bench() {
             const int pred = run_model();
             const int64_t t2 = esp_timer_get_time();
             lvtao_features(windows[w], &f);
-            sink += ctrl.step(f.score);
+            sink += ctrl.step(&f);
             const int64_t t3 = esp_timer_get_time();
 
             const int r = p * kBenchWindows + w;
@@ -257,7 +257,7 @@ void cmd_replay(bool adaptive, int fixed_stride) {
                     int stride = fixed_stride;
                     if (adaptive) {
                         lvtao_features(window, &f);
-                        stride = ctrl.step(f.score);
+                        stride = ctrl.step(&f);
                     }
                     const int64_t d = esp_timer_get_time();
 

@@ -28,9 +28,6 @@ void lvtao_features(const float window[][kAxes], WindowFeatures* out) {
     out->temporal_difference = (td[0] + td[1] + td[2]) / 3.0f;
     out->norm_variance = (logf(out->variance + kFeatureEps) - kMuLogVar) / kSdLogVar;
     out->norm_temporal_difference = (logf(out->temporal_difference + kFeatureEps) - kMuLogTd) / kSdLogTd;
-    out->score = kCompositeRule
-        ? kAlpha * out->norm_variance + kBeta * out->norm_temporal_difference
-        : fmaxf(out->norm_variance, out->norm_temporal_difference);
 }
 
 static int level_of(float score, float t1, float t2) {
@@ -40,9 +37,27 @@ static int level_of(float score, float t1, float t2) {
 void LvtaoController::reset() {
     level_ = kInitialLevel;
     dwell_ = 0;
+    has_prev_ = false;
+    prev_v_ = 0.0f;
+    prev_d_ = 0.0f;
 }
 
-int LvtaoController::step(float score) {
+static float score_of(const WindowFeatures* f, bool has_prev, float prev_v, float prev_d) {
+    const float v = f->norm_variance;
+    const float d = f->norm_temporal_difference;
+    if (kChangeRule) {
+        // A transition shows up as a jump in either statistic between consecutive inference windows.
+        return has_prev ? fmaxf(fabsf(v - prev_v), fabsf(d - prev_d)) : 0.0f;
+    }
+    return kCompositeRule ? kAlpha * v + kBeta * d : fmaxf(v, d);
+}
+
+int LvtaoController::step(WindowFeatures* f) {
+    const float score = f->score = score_of(f, has_prev_, prev_v_, prev_d_);
+    has_prev_ = true;
+    prev_v_ = f->norm_variance;
+    prev_d_ = f->norm_temporal_difference;
+
     // Move up immediately; move down only after kDwell decisions and past the hysteresis margin.
     const int up = level_of(score, kT1, kT2);
     if (up > level_) {

@@ -23,8 +23,9 @@ def fold_policies(fold_id):
     cal = D.load_json(D.fold_dir(fold_id) / "lvtao_params.json")
     policies = [Policy.fixed(s) for s in C.FIXED_STRIDES]
     policies.append(Policy.lvtao(LvtaoParams(**cal["lvtao"]), "lvtao"))
-    if "lvtao_composite" in cal:
-        policies.append(Policy.lvtao(LvtaoParams(**cal["lvtao_composite"]), "lvtao_composite"))
+    for key in ("lvtao_intensity", "lvtao_composite", "lvtao_change"):
+        if key in cal and key != cal.get("main_variant"):
+            policies.append(Policy.lvtao(LvtaoParams(**cal[key]), key))
     policies.append(Policy.fixed(cal["budget_matched_stride"], "budget_matched"))
     return policies
 

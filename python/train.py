@@ -8,6 +8,7 @@ import time
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from sklearn.metrics import f1_score
 
 import config as C
 import data as D
@@ -27,34 +28,49 @@ def build_model(n_classes):
     ])
 
 
-def train_fold(fold):
-    out = D.fold_dir(fold["fold"])
-    tf.keras.utils.set_random_seed(C.SEED)
+def class_weights(y, n_classes, mode):
+    """'balanced': inverse frequency; 'sqrt': inverse square root of frequency; 'none': no weights."""
+    if mode == "none":
+        return None
+    counts = np.bincount(y, minlength=n_classes).astype(float)
+    present = counts > 0
+    raw = np.zeros(n_classes)
+    raw[present] = 1.0 / (counts[present] if mode == "balanced" else np.sqrt(counts[present]))
+    raw *= counts.sum() / (raw * counts).sum()   # average weight per training window = 1
+    return {i: float(w) for i, w in enumerate(raw)}
 
+
+def fit(fold, weighting, stride, verbose=2):
+    """Train one model; returns (model, mean, std, history, seconds, n_train, n_val)."""
+    tf.keras.utils.set_random_seed(C.SEED)
     mean, std = D.fit_norm(fold["train"])
-    x_tr, y_tr = D.labelled_windows(fold["train"], C.TRAIN_STRIDE)
-    x_va, y_va = D.labelled_windows(fold["val"], C.TRAIN_STRIDE)
+    x_tr, y_tr = D.labelled_windows(fold["train"], stride)
+    x_va, y_va = D.labelled_windows(fold["val"], C.EVAL_STRIDE)
     x_tr, x_va = D.normalize(x_tr, mean, std), D.normalize(x_va, mean, std)
-    print(f"fold {fold['fold']}: {len(y_tr)} training windows, {len(y_va)} validation windows")
 
     n_classes = len(C.CLASSES)
-    class_weight = None
-    if C.CLASS_WEIGHTING:
-        counts = np.bincount(y_tr, minlength=n_classes).astype(float)
-        present = counts > 0
-        weights = np.zeros(n_classes)
-        weights[present] = counts[present].sum() / (present.sum() * counts[present])
-        class_weight = {i: float(w) for i, w in enumerate(weights)}
-
     model = build_model(n_classes)
     model.compile(optimizer=tf.keras.optimizers.Adam(C.LEARNING_RATE),
                   loss="sparse_categorical_crossentropy", metrics=["accuracy"])
-    stop = tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=C.EARLY_STOP_PATIENCE,
-                                            restore_best_weights=True)
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=C.EARLY_STOP_PATIENCE, restore_best_weights=True),
+        tf.keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=C.LR_PLATEAU_PATIENCE),
+    ]
     start = time.time()
-    hist = model.fit(x_tr, y_tr, validation_data=(x_va, y_va), epochs=C.MAX_EPOCHS,
-                     batch_size=C.BATCH_SIZE, class_weight=class_weight, callbacks=[stop], verbose=2)
-    seconds = time.time() - start
+    hist = model.fit(x_tr, y_tr, validation_data=(x_va, y_va), epochs=C.MAX_EPOCHS, batch_size=C.BATCH_SIZE,
+                     class_weight=class_weights(y_tr, n_classes, weighting), callbacks=callbacks, verbose=verbose)
+    return model, mean, std, hist, time.time() - start, len(y_tr), (x_va, y_va)
+
+
+def val_macro_f1(model, val):
+    x_va, y_va = val
+    pred = np.argmax(model.predict(x_va, verbose=0), axis=1)
+    return float(f1_score(y_va, pred, average="macro", labels=np.unique(y_va), zero_division=0))
+
+
+def train_fold(fold):
+    out = D.fold_dir(fold["fold"])
+    model, mean, std, hist, seconds, n_train, val = fit(fold, C.CLASS_WEIGHTING, C.TRAIN_STRIDE)
 
     model.save(out / "model.keras")
     pd.DataFrame(hist.history).rename_axis("epoch").to_csv(out / "history.csv")
@@ -63,16 +79,19 @@ def train_fold(fold):
         "fold": fold["fold"],
         "train_participants": fold["train"],
         "val_participants": fold["val"],
-        "train_windows": int(len(y_tr)),
-        "val_windows": int(len(y_va)),
+        "classes": list(C.CLASSES),
+        "class_weighting": C.CLASS_WEIGHTING,
+        "train_stride": C.TRAIN_STRIDE,
+        "train_windows": int(n_train),
+        "val_windows": int(len(val[1])),
+        "val_macro_f1_float": val_macro_f1(model, val),
         "epochs_run": len(hist.history["loss"]),
         "best_epoch": int(np.argmin(hist.history["val_loss"])) + 1,
         "training_seconds": round(seconds, 1),
         "parameters": int(model.count_params()),
         "float_model_bytes": (out / "model.keras").stat().st_size,
-        "class_weight": class_weight,
     })
-    print(f"fold {fold['fold']}: {model.count_params()} parameters, {seconds:.0f} s")
+    print(f"fold {fold['fold']}: {model.count_params()} parameters, {n_train} training windows, {seconds:.0f} s")
 
 
 def main():

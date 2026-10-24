@@ -38,7 +38,7 @@ class LvtaoParams:
     t2: float = 0.0
     hysteresis: float = 0.0
     dwell: int = 0
-    rule: str = "max"             # "max" (main) or "composite" (ablation)
+    rule: str = "max"   # "max"/"composite": signal intensity; "change": change since the previous inference
 
     def normalized(self, var, td):
         eps = np.float32(C.FEATURE_EPS)
@@ -46,7 +46,13 @@ class LvtaoParams:
         nt = (np.log(np.float32(td) + eps) - np.float32(self.mu_log_td)) / np.float32(self.sd_log_td)
         return np.float32(nv), np.float32(nt)
 
-    def score(self, nv, nt):
+    def score(self, nv, nt, prev=None):
+        """`prev` is (nv, nt) of the previous inference window in the segment, or None for the first one."""
+        if self.rule == "change":
+            # A transition shows up as a jump in either statistic between consecutive inference windows.
+            if prev is None:
+                return np.float32(0.0)
+            return np.float32(max(abs(np.float32(nv - prev[0])), abs(np.float32(nt - prev[1]))))
         if self.rule == "composite":
             return np.float32(np.float32(C.COMPOSITE_ALPHA) * nv + np.float32(C.COMPOSITE_BETA) * nt)
         # Either signal being high is enough to ask for denser inference.
@@ -70,9 +76,14 @@ class LvtaoController:
     def reset(self):
         self.level = C.LVTAO_INITIAL_LEVEL
         self.dwell = 0
+        self.prev = None
+        self.score = np.float32(0.0)
 
-    def step(self, score):
+    def step(self, nv, nt):
+        """Score the window from its normalized features and return the next stride."""
         p = self.p
+        score = self.score = p.score(nv, nt, self.prev)
+        self.prev = (nv, nt)
         # float32 throughout so the comparisons match the C floats exactly.
         t1, t2, h = np.float32(p.t1), np.float32(p.t2), np.float32(p.hysteresis)
         up = level_of(score, t1, t2)
@@ -92,7 +103,7 @@ def fit_feature_stats(pids):
     logs_v, logs_t = [], []
     for pid in pids:
         x, _, bounds = D.load(pid)
-        for end in D.window_ends(bounds, C.TRAIN_STRIDE):
+        for end in D.window_ends(bounds, C.EVAL_STRIDE):
             var, td = window_features(x[end - C.WINDOW:end])
             logs_v.append(np.log(var + np.float32(C.FEATURE_EPS)))
             logs_t.append(np.log(td + np.float32(C.FEATURE_EPS)))
@@ -145,8 +156,8 @@ def run_policy(policy, x, y, bounds, predict, features=None):
             if ctrl:
                 var, td = features(end)
                 nv, nt = policy.params.normalized(var, td)
-                score = policy.params.score(nv, nt)
-                stride = ctrl.step(score)
+                stride = ctrl.step(nv, nt)
+                score = ctrl.score
                 row.update(variance=float(var), temporal_difference=float(td),
                            normalized_variance=float(nv), normalized_temporal_difference=float(nt),
                            score=float(score), controller_level=ctrl.level, controller_dwell=ctrl.dwell)

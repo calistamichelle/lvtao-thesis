@@ -51,7 +51,7 @@ def write_firmware_headers(fold, tflite_bytes, model):
 
     # Bench windows: evenly spaced labelled windows from this fold's test participants,
     # with the label the Python INT8 interpreter predicts, for the parity check.
-    x_te, _ = D.labelled_windows(fold["test"], C.TRAIN_STRIDE)
+    x_te, _ = D.labelled_windows(fold["test"], C.EVAL_STRIDE)
     idx = np.linspace(0, len(x_te) - 1, C.N_BENCH_WINDOWS).astype(int)
     windows = x_te[idx]
     expected = [model.predict(w) for w in windows]
@@ -83,7 +83,7 @@ def quantize_fold(fold):
     info = {"int8_model_bytes": len(tflite_bytes), "float_model_bytes": (out / "model.keras").stat().st_size,
             "input_scale": float(int8.scale), "input_zero_point": int8.zero_point, "ops": ops}
     for split in ("val", "test"):
-        x, y = D.labelled_windows(fold[split], C.TRAIN_STRIDE)
+        x, y = D.labelled_windows(fold[split], C.EVAL_STRIDE)
         float_pred = np.argmax(model.predict(D.normalize(x, mean, std), verbose=0), axis=1)
         int8_pred = np.array([int8.predict(w) for w in x])
         info[f"{split}_float"] = scores(y, float_pred)

@@ -38,13 +38,18 @@ Run from the repo root, in order. Each step reads the previous step's outputs.
 | Step | Command | Produces |
 |---|---|---|
 | 1 | `python python/preprocess.py` | per-participant arrays, gap-split segments, `folds.json` (participant-disjoint) |
+| 1b | `python python/select_training.py` | class weighting × training stride compared on **validation** participants; copy the choice into `config.py` |
 | 2 | `python python/train.py` | Table III 1D-CNN per fold, train/val curves, parameter count, training time |
 | 3 | `python python/quantize.py` | full-INT8 model, float-vs-INT8 F1, firmware headers for `FIRMWARE_FOLD` |
-| 4 | `python python/calibrate.py` | LVTAO thresholds chosen on **validation** participants, budget-matched stride |
+| 4 | `python python/calibrate.py` | thresholds for each LVTAO rule (intensity, composite, change) chosen on **validation** participants, plus each rule's budget-matched stride |
+| 4b | `python python/select_variant.py` | main rule = largest validation gain over its budget-matched stride; set `LVTAO_RULE` in `config.py` and re-run step 4 |
 | 5 | `python python/replay.py` | every policy on the same outer-test streams: F1, transitions, delay, cadence, traces |
 | 6 | on the board, see below | latency, RAM, flash, controller overhead, deadline margin, parity |
 | 7 | `python python/energy_estimate.py` | **estimated** energy per policy (needs step 6's `bench.json`) |
 | 8 | `python python/report.py` | paired bootstrap CIs, non-inferiority verdict, IEEE tables, Pareto plot |
+
+Classes: walking, running, stairs, standing, sedentary (HARTH sitting + lying, which a single thigh
+sensor cannot separate), cycling. Shuffling is kept in the stream but not scored.
 
 All experiment constants (window, strides, folds, δ margin, delay limit, calibration grid,
 datasheet currents) are in [`python/config.py`](python/config.py). **Fix them before running step 5
