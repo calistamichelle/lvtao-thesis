@@ -19,3 +19,6 @@ firmware/dependencies.lock
 
 .DS_Store
 .vscode/
+
+# Paper drafts (kept locally, not shared)
+paper/
