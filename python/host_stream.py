@@ -33,7 +33,8 @@ SUMMARY_COLS = ["samples", "inferences", "push_us_total", "pre_us_total", "invok
 
 class Board:
     def __init__(self, port):
-        self.ser = serial.Serial(port, C.SERIAL_BAUD, timeout=0.1)
+        # A device path for the real board, or a URL such as socket://localhost:5555 for the QEMU emulator.
+        self.ser = serial.serial_for_url(port, C.SERIAL_BAUD, timeout=0.1)
         # Opening the port usually resets a DevKitC; wait for the banner, but carry on if it never comes.
         deadline = time.time() + 6
         while time.time() < deadline:
@@ -160,7 +161,8 @@ def cmd_replay(board, pid, policy_name, max_minutes):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", required=True, help="e.g. /dev/cu.usbserial-0001 (macOS) or COM5 (Windows)")
+    ap.add_argument("--port", required=True,
+                    help="e.g. /dev/cu.usbserial-0001 (macOS), COM5 (Windows), or socket://localhost:5555 (QEMU)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("info")
     sub.add_parser("bench")
@@ -169,7 +171,11 @@ def main():
     rp.add_argument("--policy", default="lvtao",
                     help="lvtao, budget_matched, or fixed_<stride> (e.g. fixed_64)")
     rp.add_argument("--max-minutes", type=float, help="only stream the first N minutes")
+    ap.add_argument("--out", help="results folder (default results/device; use e.g. results/device_qemu for the emulator)")
     args = ap.parse_args()
+    global OUT
+    if args.out:
+        OUT = C.ROOT / args.out
 
     board = Board(args.port)
     if args.cmd == "info":

@@ -12,7 +12,11 @@ class Int8Model:
         norm = D.load_json(d / "norm.json")
         self.mean = np.array(norm["mean"], np.float32)
         self.std = np.array(norm["std"], np.float32)
-        self.interp = tf.lite.Interpreter(model_path=str(d / "model_int8.tflite"))
+        # Reference kernels: the same integer arithmetic as TensorFlow Lite Micro on the ESP32. The default
+        # XNNPACK delegate can round differently and flip the argmax when two classes are tied.
+        self.interp = tf.lite.Interpreter(
+            model_path=str(d / "model_int8.tflite"),
+            experimental_op_resolver_type=tf.lite.experimental.OpResolverType.BUILTIN_REF)
         self.interp.allocate_tensors()
         self.inp = self.interp.get_input_details()[0]
         self.out = self.interp.get_output_details()[0]

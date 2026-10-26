@@ -75,6 +75,26 @@ python python/host_stream.py --port /dev/cu.usbserial-0001 replay --participant 
 - `bench`: µs for preprocessing, `Invoke()` and the controller over 512 runs, plus a check that the board's INT8 predictions match Python's
 - `replay`: the board runs the policy on a participant's stream and logs every decision with timings. The script checks it made the same decisions as `replay.py` and reports the worst-case work per 20 ms sample period (the deadline margin). Use a test participant of `FIRMWARE_FOLD`; `--max-minutes 10` makes it quicker.
 
+### Without a board: Espressif's QEMU emulator
+
+The same firmware image runs in Espressif's ESP32 emulator. It is exact for memory use and
+decisions (parity), but **its timing is not the real chip's**, so don't report latency or energy from it.
+
+```bash
+brew install libgcrypt glib pixman sdl2 libslirp
+# download qemu-xtensa for your OS from https://github.com/espressif/qemu/releases and unpack it
+cd firmware && pio run && cd ..
+python ~/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32 merge_bin --fill-flash-size 4MB \
+  -o flash.bin 0x1000 firmware/.pio/build/esp32dev/bootloader.bin \
+  0x8000 firmware/.pio/build/esp32dev/partitions.bin 0x10000 firmware/.pio/build/esp32dev/firmware.bin
+qemu/bin/qemu-system-xtensa -nographic -machine esp32 -drive file=flash.bin,if=mtd,format=raw \
+  -serial tcp:127.0.0.1:5555,server=on,wait=off -monitor none &
+python python/host_stream.py --port socket://127.0.0.1:5555 --out results/device_qemu bench
+```
+
+The Python reference runs the INT8 model with TensorFlow Lite's reference kernels, which use the
+same integer arithmetic as TFLM, so device and simulation agree bit for bit.
+
 The firmware needs the headers in `firmware/src/generated/`, which steps 3 and 4 write.
 Commit them once you have real results so the firmware builds straight from a clone.
 
