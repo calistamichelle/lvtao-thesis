@@ -40,6 +40,9 @@ class Board:
         while time.time() < deadline:
             if "LVTAO_FW READY" in self.ser.readline().decode(errors="replace"):
                 break
+        # The reset can leave a stray byte in the board's line buffer; end that line and drop the reply.
+        self.send("\n")
+        time.sleep(0.3)
         self.ser.reset_input_buffer()
 
     def send(self, data):

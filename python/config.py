@@ -81,7 +81,7 @@ DWELL_GRID = (0, 2, 4)
 # --- Embedded --------------------------------------------------------------
 FIRMWARE_FOLD = 0               # whose model/thresholds are flashed; latency does not depend on the fold
 N_BENCH_WINDOWS = 64
-SERIAL_BAUD = 921600
+SERIAL_BAUD = 115200            # ESP-IDF console default; CH340 boards garble 921600
 REPLAY_BLOCK = 32               # samples per serial block before the device acknowledges
 
 # --- Energy ESTIMATE (no power meter) --------------------------------------
