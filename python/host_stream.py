@@ -1,4 +1,4 @@
-"""Talk to the ESP32 firmware over USB serial.
+"""Step 6: talk to the ESP32 firmware over USB serial.
 
   python python/host_stream.py --port /dev/cu.usbserial-XXXX info
   python python/host_stream.py --port /dev/cu.usbserial-XXXX bench

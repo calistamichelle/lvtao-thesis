@@ -1,4 +1,4 @@
-"""Step 6: ESTIMATED energy per policy (no power meter).
+"""Step 7: ESTIMATED energy per policy (no power meter).
 
 Uses per-inference CPU time measured on the ESP32 (results/device/bench.json) and the
 inference counts from the Python replay (results/replay/per_participant.csv):

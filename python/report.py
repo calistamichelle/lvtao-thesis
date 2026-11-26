@@ -1,4 +1,4 @@
-"""Step 7: chapter 4 tables and figures.
+"""Step 8: result tables (Tables IV-VI) and the Pareto plot.
 
 Paired per-participant bootstrap 95% CIs for LVTAO minus each baseline, the
 non-inferiority verdict against the best fixed stride (chosen on validation), and

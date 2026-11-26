@@ -76,6 +76,9 @@ def main():
             '{"stats_us": {"pre_us": {"mean": 150}, "invoke_us": {"mean": 2500}, "ctrl_us": {"mean": 120}}}')
         run("energy_estimate", env)
         run("report", env)
+        run("figures", env)
+        figures = sorted(p.name for p in (tmp / "results" / "figures").iterdir())
+        assert figures == ["fig2_tradeoff.png", "fig3_timeline.png", "fig4_transitions.png", "numbers.json"], figures
 
         generated = sorted(p.name for p in (tmp / "generated").iterdir())
         assert generated == ["bench_data.h", "controller_params.h", "model_data.h", "norm.h"], generated

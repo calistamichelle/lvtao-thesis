@@ -96,7 +96,7 @@ The Python reference runs the INT8 model with TensorFlow Lite's reference kernel
 same integer arithmetic as TFLM, so device and simulation agree bit for bit.
 
 The firmware needs the headers in `firmware/src/generated/`, which steps 3 and 4 write.
-Commit them once you have real results so the firmware builds straight from a clone.
+The fold-0 headers are committed, so the firmware builds straight from a clone.
 
 ## What the numbers mean
 
@@ -104,8 +104,8 @@ Commit them once you have real results so the firmware builds straight from a cl
   on every 20 ms sample, so a policy that infers less often is penalised for stale predictions.
 - **Transition F1 / detection delay**: scored within ±1 window of true activity changes; delay is
   the time until the new activity is first predicted.
-- **Energy is an estimate**, from measured on-device CPU time × ESP32 datasheet currents. Say so in
-  the paper. `energy_estimate.py` also prints the inference duty cycle: if inference is a tiny
-  share of the time the CPU is awake, scheduling barely changes total energy, and the paper
-  should frame the gain as compute budget rather than battery life.
+- **Energy is an estimate**, from measured on-device CPU time × ESP32 datasheet currents, not a
+  power measurement. `energy_estimate.py` also prints the inference duty cycle: when inference is a
+  tiny share of the time the CPU is awake, scheduling barely changes total energy, so the gain is
+  in compute budget rather than battery life unless the device sleeps between inferences.
 - The live MPU6050 wearable test is out of scope (Limitations / Future Work).
