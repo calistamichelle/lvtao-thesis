@@ -60,12 +60,7 @@ N_REPRESENTATIVE = 500       # training windows used to calibrate INT8 quantizat
 FIXED_STRIDES = (128, 96, 64, 32)
 LVTAO_STRIDES = (128, 64, 32)   # level 0 (persistent, low variation) -> 128 ... level 2 -> 32
 LVTAO_INITIAL_LEVEL = 1
-# Main controller rule ("max" = signal intensity, "change" = change since the previous inference).
-# Chosen on validation participants: see results/lvtao_variant_selection.csv.
-LVTAO_RULE = os.environ.get("LVTAO_RULE", "change")
 FEATURE_EPS = 1e-6
-COMPOSITE_ALPHA = 0.5           # ablation rule only: score = alpha*var + beta*td
-COMPOSITE_BETA = 0.5
 
 # --- Decision criteria (fix BEFORE looking at test results) ----------------
 NONINFERIORITY_DELTA = 0.02     # macro F1 may drop at most 2 percentage points vs the best fixed stride

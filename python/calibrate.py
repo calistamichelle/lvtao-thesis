@@ -22,11 +22,6 @@ from int8_model import CachedPredictor, Int8Model
 from policies import FeatureCache, LvtaoParams, Policy, fit_feature_stats, run_policy
 
 
-# Every variant is calibrated; config.LVTAO_RULE picks the one reported as "lvtao" and flashed to the ESP32.
-RULES = (("max", "lvtao_intensity"), ("composite", "lvtao_composite"), ("change", "lvtao_change"))
-MAIN_KEY = dict(RULES)[C.LVTAO_RULE]
-
-
 class ValSet:
     """Validation participants with prediction/feature caches shared by every grid point."""
 
@@ -54,7 +49,7 @@ class ValSet:
 
 
 def train_scores(params, pids):
-    """Score distribution on training windows (consecutive windows within a segment for the change rule)."""
+    """Change-score distribution on training windows (consecutive windows within a segment)."""
     out = []
     for pid in pids:
         x, _, bounds = D.load(pid)
@@ -63,14 +58,13 @@ def train_scores(params, pids):
             prev = None
             for end in D.window_ends([seg], C.EVAL_STRIDE):
                 nv, nt = params.normalized(*feats(end))
-                if params.rule != "change" or prev is not None:
+                if prev is not None:
                     out.append(params.score(nv, nt, prev))
                 prev = (nv, nt)
     return np.array(out)
 
 
-def search(base, rule, val, train_pids, best_fixed_f1):
-    base = LvtaoParams(**{**base.to_dict(), "rule": rule})
+def search(base, val, train_pids, best_fixed_f1):
     qs = np.quantile(train_scores(base, train_pids), C.THRESHOLD_QUANTILES)
     rows = []
     for (t1, t2), h, dwell in itertools.product(itertools.combinations(qs, 2), C.HYSTERESIS_GRID, C.DWELL_GRID):
@@ -82,7 +76,7 @@ def search(base, rule, val, train_pids, best_fixed_f1):
     if ok.any():
         chosen = grid[ok].sort_values(["inferences_per_min", "macro_f1"], ascending=[True, False]).iloc[0]
     else:
-        print(f"  WARNING: no {rule} setting met the criteria on validation; keeping the highest-F1 one")
+        print("  WARNING: no setting met the criteria on validation; keeping the highest-F1 one")
         chosen = grid.sort_values("macro_f1", ascending=False).iloc[0]
     fields = LvtaoParams.__dataclass_fields__
     params = LvtaoParams(**{k: chosen[k] for k in fields})
@@ -105,10 +99,6 @@ constexpr float kT1 = {f(params.t1)};
 constexpr float kT2 = {f(params.t2)};
 constexpr float kHysteresis = {f(params.hysteresis)};
 constexpr int kDwell = {int(params.dwell)};
-constexpr bool kCompositeRule = {'true' if params.rule == 'composite' else 'false'};
-constexpr bool kChangeRule = {'true' if params.rule == 'change' else 'false'};
-constexpr float kAlpha = {f(C.COMPOSITE_ALPHA)};
-constexpr float kBeta = {f(C.COMPOSITE_BETA)};
 constexpr int kStrides[3] = {{{', '.join(str(s) for s in C.LVTAO_STRIDES)}}};
 constexpr int kInitialLevel = {C.LVTAO_INITIAL_LEVEL};
 """)
@@ -125,31 +115,24 @@ def calibrate_fold(fold):
     print(f"fold {fold['fold']}: best fixed stride on validation = {best_stride} (macro F1 {best_f1:.3f})")
 
     base = fit_feature_stats(fold["train"])
-    result = {"best_fixed_stride": best_stride, "fixed_validation": {str(k): v for k, v in fixed.items()}}
-    grids = []
-    for rule, key in RULES:
-        params, chosen, grid = search(base, rule, val, fold["train"], best_f1)
-        grid["rule"] = rule
-        grids.append(grid)
-        result[key] = params.to_dict()
-        result[f"{key}_validation"] = {k: float(chosen[k]) for k in ("macro_f1", "delay_median_s", "inferences_per_min")}
-        result[f"{key}_met_criteria"] = bool(chosen["meets_criteria"])
-        # Budget-matched control: the fixed stride with this variant's validation inference rate.
-        rate = chosen["inferences_per_min"]
-        stride = int(np.clip(round(C.FS * 60 / rate), min(C.LVTAO_STRIDES), max(C.LVTAO_STRIDES)))
-        result[f"{key}_budget_stride"] = stride
-        result[f"{key}_budget_validation"] = val.score(Policy.fixed(stride))
-        print(f"  {key}: t1={params.t1:.3f} t2={params.t2:.3f} h={params.hysteresis} dwell={params.dwell} "
-              f"-> F1 {chosen['macro_f1']:.3f}, {rate:.1f} inf/min | budget-matched stride {stride}: "
-              f"F1 {result[f'{key}_budget_validation']['macro_f1']:.3f}")
-    result["main_variant"] = MAIN_KEY
-    result["lvtao"] = result[MAIN_KEY]
-    result["budget_matched_stride"] = result[f"{MAIN_KEY}_budget_stride"]
+    params, chosen, grid = search(base, val, fold["train"], best_f1)
+    rate = chosen["inferences_per_min"]
+    # Budget-matched control: the fixed stride with LVTAO's validation inference rate.
+    budget = int(np.clip(round(C.FS * 60 / rate), min(C.LVTAO_STRIDES), max(C.LVTAO_STRIDES)))
+    result = {"best_fixed_stride": best_stride, "fixed_validation": {str(k): v for k, v in fixed.items()},
+              "lvtao": params.to_dict(),
+              "lvtao_validation": {k: float(chosen[k]) for k in ("macro_f1", "delay_median_s", "inferences_per_min")},
+              "lvtao_met_criteria": bool(chosen["meets_criteria"]),
+              "budget_matched_stride": budget,
+              "budget_matched_validation": val.score(Policy.fixed(budget))}
+    print(f"  lvtao: t1={params.t1:.3f} t2={params.t2:.3f} h={params.hysteresis} dwell={params.dwell} "
+          f"-> F1 {chosen['macro_f1']:.3f}, {rate:.1f} inf/min | budget-matched stride {budget}: "
+          f"F1 {result['budget_matched_validation']['macro_f1']:.3f}")
 
-    pd.concat(grids).to_csv(out / "calibration_grid.csv", index=False)
+    grid.to_csv(out / "calibration_grid.csv", index=False)
     D.save_json(out / "lvtao_params.json", result)
     if fold["fold"] == C.FIRMWARE_FOLD:
-        write_controller_header(LvtaoParams(**result[MAIN_KEY]), fold["fold"])
+        write_controller_header(params, fold["fold"])
 
 
 def main():

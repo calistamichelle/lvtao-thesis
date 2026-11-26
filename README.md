@@ -12,7 +12,7 @@ streaming HARTH data to the board over USB (no wearable sensor needed).
 ## Layout
 
 ```
-python/      training, calibration, replay, metrics, device communication, report
+python/      training, calibration, replay, metrics, device communication, report, figures
 firmware/    PlatformIO (ESP-IDF) project for the ESP32 DevKitC V4
 data/harth/  put the HARTH CSVs here (not committed)
 models/      per-fold models and calibrated thresholds (generated, not committed)
@@ -41,12 +41,12 @@ Run from the repo root, in order. Each step reads the previous step's outputs.
 | 1b | `python python/select_training.py` | class weighting × training stride compared on **validation** participants; copy the choice into `config.py` |
 | 2 | `python python/train.py` | Table III 1D-CNN per fold, train/val curves, parameter count, training time |
 | 3 | `python python/quantize.py` | full-INT8 model, float-vs-INT8 F1, firmware headers for `FIRMWARE_FOLD` |
-| 4 | `python python/calibrate.py` | thresholds for each LVTAO rule (intensity, composite, change) chosen on **validation** participants, plus each rule's budget-matched stride |
-| 4b | `python python/select_variant.py` | main rule = largest validation gain over its budget-matched stride; set `LVTAO_RULE` in `config.py` and re-run step 4 |
+| 4 | `python python/calibrate.py` | LVTAO thresholds T1, T2 on the change score, chosen on **validation** participants, plus the budget-matched stride (same inference rate) |
 | 5 | `python python/replay.py` | every policy on the same outer-test streams: F1, transitions, delay, cadence, traces |
 | 6 | on the board, see below | latency, RAM, flash, controller overhead, deadline margin, parity |
 | 7 | `python python/energy_estimate.py` | **estimated** energy per policy (needs step 6's `bench.json`) |
 | 8 | `python python/report.py` | paired bootstrap CIs, non-inferiority verdict, IEEE tables, Pareto plot |
+| 9 | `python python/figures.py` | the paper's result figures (Figs. 2–4) and the other numbers quoted with them, in `results/figures/` |
 
 Classes: walking, running, stairs, standing, sedentary (HARTH sitting + lying, which a single thigh
 sensor cannot separate), cycling. Shuffling is kept in the stream but not scored.

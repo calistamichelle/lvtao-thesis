@@ -19,13 +19,10 @@ from policies import FeatureCache, LvtaoParams, Policy, run_policy
 
 
 def fold_policies(fold_id):
-    """Fixed strides, LVTAO (main + composite ablation) and the budget-matched baseline for one fold."""
+    """Fixed strides, LVTAO and the budget-matched baseline for one fold."""
     cal = D.load_json(D.fold_dir(fold_id) / "lvtao_params.json")
     policies = [Policy.fixed(s) for s in C.FIXED_STRIDES]
     policies.append(Policy.lvtao(LvtaoParams(**cal["lvtao"]), "lvtao"))
-    for key in ("lvtao_intensity", "lvtao_composite", "lvtao_change"):
-        if key in cal and key != cal.get("main_variant"):
-            policies.append(Policy.lvtao(LvtaoParams(**cal[key]), key))
     policies.append(Policy.fixed(cal["budget_matched_stride"], "budget_matched"))
     return policies
 

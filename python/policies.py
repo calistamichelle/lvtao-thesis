@@ -38,7 +38,6 @@ class LvtaoParams:
     t2: float = 0.0
     hysteresis: float = 0.0
     dwell: int = 0
-    rule: str = "max"   # "max"/"composite": signal intensity; "change": change since the previous inference
 
     def normalized(self, var, td):
         eps = np.float32(C.FEATURE_EPS)
@@ -47,16 +46,11 @@ class LvtaoParams:
         return np.float32(nv), np.float32(nt)
 
     def score(self, nv, nt, prev=None):
-        """`prev` is (nv, nt) of the previous inference window in the segment, or None for the first one."""
-        if self.rule == "change":
-            # A transition shows up as a jump in either statistic between consecutive inference windows.
-            if prev is None:
-                return np.float32(0.0)
-            return np.float32(max(abs(np.float32(nv - prev[0])), abs(np.float32(nt - prev[1]))))
-        if self.rule == "composite":
-            return np.float32(np.float32(C.COMPOSITE_ALPHA) * nv + np.float32(C.COMPOSITE_BETA) * nt)
-        # Either signal being high is enough to ask for denser inference.
-        return np.float32(max(nv, nt))
+        """Change score (4). `prev` is (nv, nt) of the previous inference window in the segment, or None for the first one."""
+        # A transition shows up as a jump in either statistic between consecutive inference windows.
+        if prev is None:
+            return np.float32(0.0)
+        return np.float32(max(abs(np.float32(nv - prev[0])), abs(np.float32(nt - prev[1]))))
 
     def to_dict(self):
         return asdict(self)

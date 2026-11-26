@@ -45,11 +45,8 @@ void LvtaoController::reset() {
 static float score_of(const WindowFeatures* f, bool has_prev, float prev_v, float prev_d) {
     const float v = f->norm_variance;
     const float d = f->norm_temporal_difference;
-    if (kChangeRule) {
-        // A transition shows up as a jump in either statistic between consecutive inference windows.
-        return has_prev ? fmaxf(fabsf(v - prev_v), fabsf(d - prev_d)) : 0.0f;
-    }
-    return kCompositeRule ? kAlpha * v + kBeta * d : fmaxf(v, d);
+    // Change score (4): a transition shows up as a jump in either statistic between consecutive inference windows.
+    return has_prev ? fmaxf(fabsf(v - prev_v), fabsf(d - prev_d)) : 0.0f;
 }
 
 int LvtaoController::step(WindowFeatures* f) {

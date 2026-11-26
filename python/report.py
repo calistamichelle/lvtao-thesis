@@ -41,8 +41,7 @@ def paired_table(df, energy):
 
     rng = np.random.default_rng(C.SEED)
     rows = []
-    comparators = ["best_fixed", *[f"fixed_{s}" for s in C.FIXED_STRIDES], "budget_matched",
-                   "lvtao_intensity", "lvtao_composite", "lvtao_change"]
+    comparators = ["best_fixed", *[f"fixed_{s}" for s in C.FIXED_STRIDES], "budget_matched"]
     for comp in comparators:
         if ("macro_f1", comp) not in wide:
             continue
